@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pokédex</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/vue-router@4/dist/vue-router.global.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Montserrat', sans-serif;
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        /* Animación de carga */
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .loader {
+            border: 4px solid rgba(0, 0, 0, .1);
+            border-left-color: #4f46e5;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        /* Estilo para el enlace activo en la navegación */
+        nav .router-link-exact-active {
+            color: #4f46e5; /* Color índigo */
+            font-weight: bold;
+            border-bottom: 2px solid #4f46e5;
+        }
+
+        nav .router-link-exact-active svg {
+            color: #4f46e5;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans antialiased">
+
+    <!-- Contenedor principal de la aplicación -->
+    <div id="app" class="container mx-auto p-4 lg:px-8">
+        <header class="mb-8 flex items-center justify-center relative py-4">
+
+            <router-link to="/" class="absolute left-0">
+                <img src="https://raw.githubusercontent.com/PokeAPI/media/master/logo/pokeapi_256.png" alt="Logo de PokeAPI" class="w-auto h-12"/>
+            </router-link>
+
+            <h1 class="text-4xl font-black text-gray-800 tracking-tight">Pokédex Interactiva</h1>
+        </header>
+
+        <!-- Navegación entre vistas -->
+        <nav class="flex justify-center gap-8 mb-8 border-b pb-2 items-center">
+            <router-link to="/" class="text-lg text-gray-600 hover:text-indigo-600 transition-colors duration-300 pb-1">Inicio</router-link>
+            <router-link to="/favoritos" class="text-gray-600 hover:text-indigo-600 transition-colors duration-300 pb-1" title="Favoritos">
+                 <svg class="w-7 h-7" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd"></path>
+                </svg>
+            </router-link>
+        </nav>
+
+        <main>
+            <router-view></router-view>
+        </main>
+
+        <footer class="text-center mt-12 text-gray-500">
+            <p>©2025 Pokédex</p>
+        </footer>
+    </div>
+
+    <script type="module">
+        const { createApp, ref, reactive, onMounted, computed, watch } = Vue;
+        const { createRouter, createWebHashHistory, useRoute, useRouter } = VueRouter;
+
+        //Colores por tipo
+        const pastelTypeColors = {
+            normal: 'bg-gray-200', fire: 'bg-red-200', water: 'bg-blue-200',
+            electric: 'bg-yellow-200', grass: 'bg-green-200', ice: 'bg-cyan-200',
+            fighting: 'bg-orange-200', poison: 'bg-purple-200', ground: 'bg-amber-200',
+            flying: 'bg-indigo-200', psychic: 'bg-pink-200', bug: 'bg-lime-200',
+            rock: 'bg-yellow-300', ghost: 'bg-indigo-300', dragon: 'bg-indigo-300',
+            dark: 'bg-gray-300', steel: 'bg-neutral-300', fairy: 'bg-pink-200'
+        };
+
+        const typeTranslations = {
+            normal: 'Normal', fire: 'Fuego', water: 'Agua', electric: 'Eléctrico',
+            grass: 'Planta', ice: 'Hielo', fighting: 'Lucha', poison: 'Veneno',
+            ground: 'Tierra', flying: 'Volador', psychic: 'Psíquico', bug: 'Bicho',
+            rock: 'Roca', ghost: 'Fantasma', dragon: 'Dragón', dark: 'Siniestro',
+            steel: 'Acero', fairy: 'Hada'
+        };
+
+        const typeIcons = {
+            grass: 'img/grass.svg', fire: 'img/fire.svg', water: 'img/water.svg',
+            electric: 'img/electric.svg', steel: 'img/steel.svg', rock: 'img/rock.svg',
+            bug: 'img/bug.svg', dragon: 'img/dragon.svg', ghost: 'img/ghost.svg',
+            fairy: 'img/fairy.svg', ice: 'img/ice.svg', fighting: 'img/fighting.svg',
+            normal: 'img/normal.svg', psychic: 'img/psychic.svg', dark: 'img/dark.svg',
+            ground: 'img/ground.svg', flying: 'img/flying.svg', poison: 'img/poison.svg'
+        };
+
+        const favoritesState = reactive({
+            favorites: JSON.parse(localStorage.getItem('pokemonFavorites') || '[]'),
+            toggleFavorite(pokemonId) {
+                const id = parseInt(pokemonId);
+                const index = this.favorites.indexOf(id);
+                if (index === -1) {
+                    this.favorites.push(id);
+                } else {
+                    this.favorites.splice(index, 1);
+                }
+                this.saveToLocalStorage();
+            },
+            isFavorite(pokemonId) {
+                return this.favorites.includes(parseInt(pokemonId));
+            },
+            saveToLocalStorage() {
+                localStorage.setItem('pokemonFavorites', JSON.stringify(this.favorites));
+            }
+        });
+
+        //Tarjeta de Pokémon
+        const PokemonCard = {
+            props: {
+                pokemon: { type: Object, required: true }
+            },
+            setup(props) {
+                const pokemonId = computed(() => props.pokemon.id);
+                const imageUrl = computed(() => `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${pokemonId.value}.png`);
+                
+                const handleFavoriteClick = () => {
+                    favoritesState.toggleFavorite(pokemonId.value);
+                };
+
+                const bgColorClass = computed(() => {
+                    const type = props.pokemon.types[0]?.type.name || 'normal';
+                    return pastelTypeColors[type] || 'bg-gray-200';
+                });
+
+                return {
+                    pokemonId,
+                    imageUrl,
+                    handleFavoriteClick,
+                    isFavorite: computed(() => favoritesState.isFavorite(pokemonId.value)),
+                    bgColorClass
+                };
+            },
+            template: `
+                <div class="relative rounded-lg shadow-md hover:shadow-xl transition-all duration-300 ease-in-out p-4 flex flex-col items-center text-center group" :class="bgColorClass">
+                    <button @click.prevent.stop="handleFavoriteClick" class="absolute top-2 right-2 p-1 rounded-full bg-white/50 hover:bg-white transition-colors">
+                        <svg class="w-6 h-6" :class="isFavorite ? 'text-red-500' : 'text-gray-500'" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd"></path>
+                        </svg>
+                    </button>
+                    <router-link :to="'/pokemon/' + pokemonId" class="w-full">
+                        <img :src="imageUrl" :alt="'Imagen de ' + pokemon.name" class="w-32 h-32 object-contain mb-2 mx-auto" loading="lazy">
+                        <span class="font-semibold text-gray-600 text-sm">N.º {{ pokemonId }}</span>
+                        <h3 class="text-lg font-bold capitalize text-gray-800 truncate w-full">{{ pokemon.name }}</h3>
+                    </router-link>
+                </div>
+            `
+        };
+
+        //Página de inicio
+        const HomeView = {
+            components: { PokemonCard },
+            setup() {
+                const pokemons = ref([]);
+                const searchQuery = ref('');
+                const isLoading = ref(true);
+                const error = ref(null);
+
+                const fetchPokemons = async () => {
+                    isLoading.value = true;
+                    error.value = null;
+                    try {
+                        //Se obtiene la lista de los 151 Pokémon
+                        const listResponse = await fetch('https://pokeapi.co/api/v2/pokemon?limit=151');
+                        if (!listResponse.ok) throw new Error('No se pudo obtener la lista de Pokémon.');
+                        const listData = await listResponse.json();
+
+                        const detailPromises = listData.results.map(p => fetch(p.url).then(res => res.json()));
+                        
+                        const detailedPokemons = await Promise.all(detailPromises);
+                        pokemons.value = detailedPokemons;
+
+                    } catch (err) {
+                        error.value = err.message;
+                    } finally {
+                        isLoading.value = false;
+                    }
+                };
+                onMounted(fetchPokemons);
+
+                const filteredPokemons = computed(() => {
+                    if (!searchQuery.value) return pokemons.value;
+                    return pokemons.value.filter(p => p.name.toLowerCase().includes(searchQuery.value.toLowerCase()));
+                });
+
+                return { searchQuery, filteredPokemons, isLoading, error };
+            },
+            template: `
+                <div class="w-full">
+                    <div class="mb-6 max-w-2xl mx-auto">
+                        <input type="text" v-model="searchQuery" placeholder="Buscar Pokémon por nombre..."
+                               class="w-full px-4 py-3 rounded-lg shadow-sm border-gray-300 focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 transition duration-150 ease-in-out">
+                    </div>
+                    <div v-if="isLoading" class="flex justify-center items-center h-40"><div class="loader"></div></div>
+                    <div v-else-if="error" class="text-center text-red-500 bg-red-100 p-4 rounded-lg"><p><strong>Error:</strong> {{ error }}</p></div>
+                    <div v-else-if="filteredPokemons.length > 0">
+                        <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4">
+                            <pokemon-card v-for="pokemon in filteredPokemons" :key="pokemon.id" :pokemon="pokemon"></pokemon-card>
+                        </div>
+                    </div>
+                    <div v-else class="text-center text-gray-500 bg-gray-200 p-4 rounded-lg"><p>No se encontraron Pokémon.</p></div>
+                </div>
+            `
+        };
+
+        //Detalle del Pokémon
+        const PokemonDetailView = {
+            setup() {
+                const route = useRoute();
+                const router = useRouter();
+                const pokemon = ref(null);
+                const isLoading = ref(true);
+                const error = ref(null);
+                const pokemonId = computed(() => parseInt(route.params.id));
+
+                const typeColors = { normal: 'bg-gray-400', fire: 'bg-red-500', water: 'bg-blue-500', electric: 'bg-yellow-400', grass: 'bg-green-500', ice: 'bg-cyan-300', fighting: 'bg-orange-700', poison: 'bg-purple-600', ground: 'bg-yellow-600', flying: 'bg-indigo-400', psychic: 'bg-pink-500', bug: 'bg-lime-500', rock: 'bg-yellow-700', ghost: 'bg-indigo-800', dragon: 'bg-indigo-600', dark: 'bg-gray-700', steel: 'bg-gray-500', fairy: 'bg-pink-300' };
+
+                const fetchPokemonDetails = async () => {
+                    isLoading.value = true;
+                    error.value = null;
+                    pokemon.value = null;
+                    try {
+                        const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${pokemonId.value}`);
+                        if (!response.ok) throw new Error('No se pudo encontrar el Pokémon.');
+                        pokemon.value = await response.json();
+                    } catch (err) {
+                        error.value = err.message;
+                    } finally {
+                        isLoading.value = false;
+                    }
+                };
+
+                watch(pokemonId, fetchPokemonDetails, { immediate: true });
+
+                const getStatName = (stat) => ({ 'hp': 'HP', 'attack': 'Ataque', 'defense': 'Defensa', 'special-attack': 'At. Especial', 'special-defense': 'Def. Especial', 'speed': 'Velocidad' }[stat] || stat);
+                
+                const handleFavoriteClick = () => {
+                    if (pokemon.value) favoritesState.toggleFavorite(pokemon.value.id);
+                };
+
+                const isFirstPokemon = computed(() => pokemonId.value <= 1);
+                const isLastPokemon = computed(() => pokemonId.value >= 151);
+
+                const goToNextPokemon = () => !isLastPokemon.value && router.push({ name: 'pokemon-detail', params: { id: pokemonId.value + 1 } });
+                const goToPreviousPokemon = () => !isFirstPokemon.value && router.push({ name: 'pokemon-detail', params: { id: pokemonId.value - 1 } });
+                
+                const cardBgColorClass = computed(() => {
+                    if (!pokemon.value) return 'bg-white';
+                    const type = pokemon.value.types[0]?.type.name || 'normal';
+                    return pastelTypeColors[type] || 'bg-gray-200';
+                });
+
+                return { pokemon, isLoading, error, typeColors, getStatName, handleFavoriteClick, isFavorite: computed(() => pokemon.value && favoritesState.isFavorite(pokemon.value.id)), isFirstPokemon, isLastPokemon, goToNextPokemon, goToPreviousPokemon, cardBgColorClass, typeTranslations, typeIcons };
+            },
+            template: `
+                <div>
+                    <div class="text-center mb-6">
+                        <router-link to="/" class="inline-block bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300">&larr; Volver a la lista</router-link>
+                    </div>
+                    
+                    <div class="relative flex justify-center items-center px-6 md:px-0">
+                        <button @click="goToPreviousPokemon" :disabled="isFirstPokemon" v-if="pokemon" class="absolute left-0 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white shadow-md hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition z-10">
+                            <svg class="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                        </button>
+
+                        <div class="w-full">
+                            <div v-if="isLoading" class="flex justify-center items-center h-64"><div class="loader"></div></div>
+                            <div v-else-if="error" class="text-center text-red-500 bg-red-100 p-4 rounded-lg max-w-md mx-auto"><p><strong>Error:</strong> {{ error }}</p></div>
+                            <div v-else-if="pokemon" class="max-w-2xl mx-auto rounded-xl shadow-lg overflow-hidden md:flex transition-colors duration-300" :class="cardBgColorClass">
+                                <div class="md:w-1/2 p-8 flex flex-col justify-center items-center">
+                                    <img :src="pokemon.sprites.other['official-artwork'].front_default" :alt="'Imagen de ' + pokemon.name" class="w-64 h-64 object-contain">
+                                    <div class="flex items-center gap-4 mt-4">
+                                        <h2 class="text-4xl font-extrabold capitalize text-gray-900">{{ pokemon.name }}</h2>
+                                        <button @click="handleFavoriteClick" class="p-2 rounded-full bg-white/50 hover:bg-white transition-colors">
+                                            <svg class="w-8 h-8" :class="isFavorite ? 'text-red-500' : 'text-gray-400'" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd"></path></svg>
+                                        </button>
+                                    </div>
+                                    <span class="font-semibold text-gray-600 text-xl">N.º {{ pokemon.id }}</span>
+                                </div>
+                                <div class="p-8 md:w-1/2 bg-white/50 rounded-lg">
+                                    <h3 class="text-xl font-bold text-gray-800 mb-3">Tipos</h3>
+                                    <div class="flex flex-wrap gap-2 mb-6">
+                                        <!-- MODIFICADO: Se usa <img> en lugar de v-html -->
+                                        <span v-for="typeInfo in pokemon.types" :key="typeInfo.type.name" 
+                                              :class="[typeColors[typeInfo.type.name] || 'bg-gray-400', 'text-white px-3 py-1 rounded-full text-sm font-semibold capitalize shadow flex items-center justify-center']">
+                                            <img :src="typeIcons[typeInfo.type.name]" class="w-4 h-4 mr-1.5" alt="">
+                                            {{ typeTranslations[typeInfo.type.name] }}
+                                        </span>
+                                    </div>
+                                    <h3 class="text-xl font-bold text-gray-800 mb-3">Estadísticas Base</h3>
+                                    <div class="space-y-3">
+                                        <div v-for="statInfo in pokemon.stats" :key="statInfo.stat.name" class="flex items-center">
+                                            <span class="w-1/3 text-sm font-medium text-gray-700 capitalize">{{ getStatName(statInfo.stat.name) }}</span>
+                                            <div class="w-2/3 bg-gray-200 rounded-full h-5"><div class="bg-indigo-500 h-5 rounded-full text-xs font-medium text-blue-100 text-center p-0.5 leading-none" :style="{ width: statInfo.base_stat/2.55 + '%' }"><span class="font-bold px-2">{{ statInfo.base_stat }}</span></div></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button @click="goToNextPokemon" :disabled="isLastPokemon" v-if="pokemon" class="absolute right-0 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white shadow-md hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition z-10">
+                            <svg class="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                        </button>
+                    </div>
+                </div>
+            `
+        };
+
+        //Página de favoritos
+        const FavoritesView = {
+            components: { PokemonCard },
+            setup() {
+                const favoritePokemons = ref([]);
+                const isLoading = ref(true);
+                const fetchFavorites = async () => {
+                    isLoading.value = true;
+                    if (favoritesState.favorites.length === 0) {
+                        favoritePokemons.value = [];
+                        isLoading.value = false;
+                        return;
+                    }
+                    try {
+                        const requests = favoritesState.favorites.map(id => fetch(`https://pokeapi.co/api/v2/pokemon/${id}`).then(res => res.json()));
+                        const results = await Promise.all(requests);
+                        favoritePokemons.value = results;
+                    } catch (err) {
+                        console.error("Error fetching favorites:", err);
+                    } finally {
+                        isLoading.value = false;
+                    }
+                };
+                watch(() => [...favoritesState.favorites], fetchFavorites, { immediate: true });
+                return { favoritePokemons, isLoading };
+            },
+            template: `
+                <div class="w-full">
+                    <h2 class="text-3xl font-bold text-center mb-8 text-gray-700">Mis Pokémon Favoritos</h2>
+                    <div v-if="isLoading" class="flex justify-center items-center h-40"><div class="loader"></div></div>
+                    <div v-else-if="favoritePokemons.length > 0">
+                        <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4">
+                            <pokemon-card v-for="pokemon in favoritePokemons" :key="pokemon.id" :pokemon="pokemon"></pokemon-card>
+                        </div>
+                    </div>
+                    <div v-else class="text-center text-gray-500 bg-gray-200 p-6 rounded-lg">
+                        <p class="text-xl">Aún no has guardado ningún Pokémon favorito.</p>
+                        <p>¡Haz clic en el corazón de un Pokémon para añadirlo!</p>
+                    </div>
+                </div>
+            `
+        };
+
+        //Rutas
+        const routes = [
+            { path: '/', component: HomeView, name: 'home' },
+            { path: '/pokemon/:id', component: PokemonDetailView, name: 'pokemon-detail' },
+            { path: '/favoritos', component: FavoritesView, name: 'favorites' }
+        ];
+
+        const router = createRouter({ history: createWebHashHistory(), routes });
+
+        //Creación de la app
+        const app = createApp({});
+        app.component('HomeView', HomeView);
+        app.component('PokemonDetailView', PokemonDetailView);
+        app.component('FavoritesView', FavoritesView);
+        app.use(router);
+        app.mount('#app');
+    </script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
